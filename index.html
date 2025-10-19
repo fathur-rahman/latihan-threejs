@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exploding Stars</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: radial-gradient(circle at center, #FFFFFF, #FFF8E7);
+        }
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        let scene, camera, renderer;
+        let mouse = { x: 0, y: 0 };
+        let particles = [];
+        let box;
+
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 30;
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            // Create box in the center
+            const geometry = new THREE.BoxGeometry(5, 5, 5);
+            const material = new THREE.MeshStandardMaterial({ 
+                color: 0xFFD700,
+                metalness: 0.3,
+                roughness: 0.4
+            });
+            box = new THREE.Mesh(geometry, material);
+            scene.add(box);
+
+            // Add soft lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(5, 5, 5);
+            scene.add(directionalLight);
+
+            const pointLight = new THREE.PointLight(0xFFD700, 0.6, 100);
+            pointLight.position.set(0, 0, 20);
+            scene.add(pointLight);
+
+            window.addEventListener('resize', onResize);
+            window.addEventListener('click', onClick);
+
+            animate();
+        }
+
+        function onClick(e) {
+            // Convert mouse position to 3D coordinates
+            const x = (e.clientX / window.innerWidth) * 2 - 1;
+            const y = -(e.clientY / window.innerHeight) * 2 + 1;
+
+            const vector = new THREE.Vector3(x, y, 0.5);
+            vector.unproject(camera);
+            const dir = vector.sub(camera.position).normalize();
+            const distance = -camera.position.z / dir.z;
+            const pos = camera.position.clone().add(dir.multiplyScalar(distance));
+
+            explodeStar(pos);
+        }
+
+        function explodeStar(pos) {
+            const color = new THREE.Color().setHSL(Math.random(), 1, 0.7);
+
+            // Create heart shape
+            const heartShape = new THREE.Shape();
+            heartShape.moveTo(0, 0);
+            heartShape.bezierCurveTo(0, -0.3, -0.6, -0.3, -0.6, 0);
+            heartShape.bezierCurveTo(-0.6, 0.3, 0, 0.6, 0, 1);
+            heartShape.bezierCurveTo(0, 0.6, 0.6, 0.3, 0.6, 0);
+            heartShape.bezierCurveTo(0.6, -0.3, 0, -0.3, 0, 0);
+
+            const extrudeSettings = {
+                depth: 0.3,
+                bevelEnabled: true,
+                bevelThickness: 0.05,
+                bevelSize: 0.05,
+                bevelSegments: 2
+            };
+
+            // Create explosion particles
+            for (let i = 0; i < 30; i++) {
+                const geometry = new THREE.ExtrudeGeometry(heartShape, extrudeSettings);
+                const material = new THREE.MeshBasicMaterial({ color: color });
+                const particle = new THREE.Mesh(geometry, material);
+                
+                particle.position.copy(pos);
+                
+                // Random velocity in all directions
+                const speed = Math.random() * 0.5 + 0.3;
+                const theta = Math.random() * Math.PI * 2;
+                const phi = Math.random() * Math.PI;
+                
+                particle.velocity = new THREE.Vector3(
+                    Math.sin(phi) * Math.cos(theta) * speed,
+                    Math.sin(phi) * Math.sin(theta) * speed,
+                    Math.cos(phi) * speed
+                );
+                
+                // Randomize initial rotation
+                particle.rotation.x = Math.random() * Math.PI * 2;
+                particle.rotation.y = Math.random() * Math.PI * 2;
+                particle.rotation.z = Math.random() * Math.PI * 2;
+                
+                // Random rotation speed
+                particle.rotationSpeed = {
+                    x: (Math.random() - 0.5) * 0.2,
+                    y: (Math.random() - 0.5) * 0.2,
+                    z: (Math.random() - 0.5) * 0.2
+                };
+                
+                particle.life = 1.0;
+                particle.decay = Math.random() * 0.01 + 0.015;
+                
+                scene.add(particle);
+                particles.push(particle);
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Rotate the box slowly
+            box.rotation.x += 0.005;
+            box.rotation.y += 0.005;
+
+            // Update particles
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.position.add(p.velocity);
+                p.velocity.multiplyScalar(0.97);
+                p.life -= p.decay;
+                p.material.opacity = p.life;
+                p.material.transparent = true;
+                p.scale.setScalar(p.life);
+
+                if (p.life <= 0) {
+                    scene.remove(p);
+                    particles.splice(i, 1);
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        function onResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        init();
+    </script>
+</body>
+</html>
